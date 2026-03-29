@@ -1,2 +1,17 @@
 name: vault_sanitizer
 description: AI training data sanitizer environment
+
+actions:
+  - redact
+  - delete
+  - bypass
+
+observations:
+  - data_chunk
+  - risk_report
+  - attempts_left
+
+tasks:
+  - pii_scrubbing
+  - secret_detection
+  - contextual_deidentification
