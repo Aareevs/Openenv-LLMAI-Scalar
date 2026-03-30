@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Optional
+from typing import Literal
 
 class Observation(BaseModel):
     data_chunk: str
@@ -7,7 +8,7 @@ class Observation(BaseModel):
     attempts_left: int
 
 class Action(BaseModel):
-    action_type: str  # redact, delete, bypass
+    action_type: Literal["redact", "delete", "bypass"]
     content: Optional[str] = ""
 
 class Reward(BaseModel):

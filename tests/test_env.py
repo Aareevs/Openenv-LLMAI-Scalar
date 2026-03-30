@@ -1,6 +1,7 @@
 import pytest
 from env.environment import VaultSanitizerEnv
 from env.models import Action
+from pydantic import ValidationError
 
 @pytest.fixture
 def env():
@@ -93,3 +94,8 @@ def test_deterministic_behavior(env):
     _, reward2, _, _ = env.step(action)
 
     assert reward1.score == reward2.score
+
+
+def test_action_type_rejects_unknown_value():
+    with pytest.raises(ValidationError):
+        Action(action_type="mask", content="test")
