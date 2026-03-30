@@ -97,5 +97,9 @@ def test_deterministic_behavior(env):
 
 
 def test_action_type_rejects_unknown_value():
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as exc_info:
         Action(action_type="mask", content="test")
+
+    errors = exc_info.value.errors()
+    assert any("action_type" in err.get("loc", []) for err in errors)
+    assert "mask" in str(exc_info.value)
