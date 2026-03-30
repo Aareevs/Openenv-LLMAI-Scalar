@@ -91,7 +91,9 @@ def llm_agent_logic(obs, client, model_name):
         return {"action_type": action_type, "content": result.get("content", obs['data_chunk'])}
     except Exception as e:
         print(f"  [!] LLM Error: {e} → using enhanced fallback")
-        return enhanced_agent_logic(obs)
+        action = enhanced_agent_logic(obs)
+        action["is_fallback"] = True
+        return action
 
 # --- EVALUATION LOOP ---
 
@@ -100,15 +102,18 @@ def evaluate_agent(agent_name, agent_func, base_url="http://localhost:7860"):
     resp = requests.post(f"{base_url}/reset")
     if resp.status_code != 200:
         print(f"  [!] Error: Could not reset environment for {agent_name}.")
-        return 0.0
+        return 0.0, False
         
     obs = resp.json()["observation"]
     total_score = 0
     steps = 0
+    used_fallback = False
     
     while True:
         # Get action from the specific agent
         action_payload = agent_func(obs)
+        if action_payload.pop("is_fallback", False):
+            used_fallback = True
         
         # Step the environment
         step_resp = requests.post(f"{base_url}/step", json=action_payload)
@@ -127,7 +132,7 @@ def evaluate_agent(agent_name, agent_func, base_url="http://localhost:7860"):
 
     avg_score = total_score / steps if steps > 0 else 0
     print(f"  -> Finished {steps} steps. Average Score: {avg_score:0.2f}")
-    return avg_score
+    return avg_score, used_fallback
 
 if __name__ == "__main__":
     base_url = "http://localhost:7860" # Can be swapped to HF Space URL later
@@ -155,6 +160,10 @@ if __name__ == "__main__":
     print("\n" + "="*40)
     print("🏆 FINAL AGENT PERFORMANCE TABLE 🏆")
     print("="*40)
-    for agent, score in results.items():
-        print(f"{agent.ljust(15)} -> Score: {score:0.2f}")
+    for agent, (score, is_fallback) in results.items():
+        if agent == "LLMAgent":
+            suffix = "(fall-back)" if is_fallback else f"({model_name})"
+            print(f"{agent.ljust(15)} -> Score: {score:0.2f} {suffix}")
+        else:
+            print(f"{agent.ljust(15)} -> Score: {score:0.2f}")
     print("="*40)
