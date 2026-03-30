@@ -103,3 +103,27 @@ def test_action_type_rejects_unknown_value():
     errors = exc_info.value.errors()
     assert any("action_type" in err.get("loc", []) for err in errors)
     assert "mask" in str(exc_info.value)
+
+
+def test_action_type_accepts_supported_values():
+    for action_type in ["redact", "delete", "bypass"]:
+        action = Action(action_type=action_type, content="test")
+        assert action.action_type == action_type
+
+
+def test_step_handles_invalid_action_type_gracefully(env):
+    class RawAction:
+        action_type = "mask"
+        content = "test"
+
+    env.reset()
+    state_before = env.state().copy()
+
+    obs, reward, done, info = env.step(RawAction())
+
+    assert obs is not None
+    assert reward.score == 0.0
+    assert done is False
+    assert info.get("error") == "invalid_action_type"
+    assert info.get("supported_actions") == ["bypass", "delete", "redact"]
+    assert env.state() == state_before
