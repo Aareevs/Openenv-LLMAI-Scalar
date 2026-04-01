@@ -9,6 +9,10 @@ class VaultGrader:
         return self.gold[idx]
 
     def grade(self, original_text, agent_output, gold_entry):
+        # Prevent reward exploitation via aggressive deletion of useful context.
+        if original_text and len(agent_output) < 0.3 * len(original_text):
+            return 0.0
+
         TP = 0
         FN = 0
         FP = 0
