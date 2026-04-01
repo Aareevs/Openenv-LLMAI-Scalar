@@ -1,5 +1,8 @@
 import json
 
+
+OVER_DELETION_MIN_RATIO = 0.3
+
 class VaultGrader:
     def __init__(self):
         with open("data/gold_manifest.json") as f:
@@ -10,7 +13,7 @@ class VaultGrader:
 
     def grade(self, original_text, agent_output, gold_entry):
         # Prevent reward exploitation via aggressive deletion of useful context.
-        if original_text and len(agent_output) < 0.3 * len(original_text):
+        if original_text and len(agent_output) < OVER_DELETION_MIN_RATIO * len(original_text):
             return 0.0
 
         TP = 0

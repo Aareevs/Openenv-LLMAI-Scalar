@@ -1,4 +1,4 @@
-from grader.grader import VaultGrader
+from grader.grader import OVER_DELETION_MIN_RATIO, VaultGrader
 
 
 def _sample_text(gold_entry):
@@ -13,10 +13,15 @@ def _sample_text(gold_entry):
 def test_over_deletion_returns_zero_score():
     grader = VaultGrader()
     gold = grader.get_gold(0)
-    original_text = _sample_text(gold)
+    original_text = (
+        f"{gold['name']} {gold['role']} {gold['email']} {gold['phone']} {gold['api_key']} "
+        + ("safe " * 400)
+    )
 
-    # Very short output triggers over-deletion guard (<30% of original length).
-    agent_output = "[REDACTED]"
+    # This keeps one repeated non-sensitive token, so pre-guard scoring would be high.
+    agent_output = "safe " * 20
+
+    assert len(agent_output) < OVER_DELETION_MIN_RATIO * len(original_text)
 
     score = grader.grade(original_text, agent_output, gold)
     assert score == 0.0
@@ -35,6 +40,6 @@ def test_partial_redaction_above_threshold_is_allowed():
     )
 
     # Keep most utility; should not be auto-zeroed by length guard.
-    assert len(agent_output) >= 0.3 * len(original_text)
+    assert len(agent_output) >= OVER_DELETION_MIN_RATIO * len(original_text)
     score = grader.grade(original_text, agent_output, gold)
     assert score > 0.0
