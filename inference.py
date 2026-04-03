@@ -8,27 +8,32 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SYSTEM_PROMPT = """You are an elite Data Compliance Engineer auditing training datasets for Enterprise LLMs.
-Your objective is to achieve the mathematical "Pareto Optimal" balance between Data Safety (zero leaks) and Data Utility (zero over-redaction).
-
-You will receive a chunk of raw text and a set of automated risk signals.
-You have 4 available actions:
-1. "clean" - Use this to fix formatting issues, standardize dates, or remove duplicates (Easy Task).
-2. "redact" - Replace standard PII (Emails, Phones) or high-entropy Secrets (API Keys) with [REDACTED] (Medium Task).
-3. "mask" - Replace sensitive contextual relationships (e.g., if a specific person is linked to a sensitive corporate role) with a generic type, like [EXECUTIVE_NAME] (Hard Task).
-4. "bypass" - Use this if the text is safe or the risk signal is a false positive.
-
-CRITICAL DIRECTIVE FOR CONTEXTUAL DE-IDENTIFICATION (HARD TASK):
-Do not just look for names. Look for the *relationship* between entities.
-If the text says "Tim Cook, the CEO of Apple", redacting "Tim Cook" is NOT enough if "CEO of Apple" remains, as the identity can still be inferred. You must mask the relationship.
-
-RESPONSE FORMAT:
-You must return a strict JSON object. Before acting, you must write a brief 1-sentence thought process to prevent hallucinations.
-{
-  "reasoning": "I detected an AWS key and an unformatted date. I need to redact the key and clean the date.",
-  "action_type": "redact",  
-  "content": "<the fully processed string to replace the original>"
-}"""
+SYSTEM_PROMPT = (
+    "You are a Data Compliance Engineer sanitizing text for Enterprise LLM training.\n"
+    "\n"
+    "You MUST find and replace ALL of the following sensitive items with [REDACTED]:\n"
+    "1. Email addresses (e.g. john@gmail.com)\n"
+    "2. Phone numbers (e.g. 9876543210)\n"
+    "3. API keys (e.g. sk-1234567890abcd)\n"
+    "4. Person names AND their associated corporate roles (e.g. \"Akash\" and \"CFO\" must BOTH be redacted)\n"
+    "\n"
+    "You have 3 available actions:\n"
+    "- \"redact\": Replace sensitive items with [REDACTED] while keeping all other text intact. "
+    "This is your PRIMARY action. Use it whenever the text contains any sensitive data.\n"
+    "- \"bypass\": Pass the text through unchanged. Use ONLY when the text contains zero sensitive items.\n"
+    "- \"delete\": Wipe the entire chunk. Use ONLY as a last resort when the text is so densely packed "
+    "with sensitive data that surgical redaction is impossible. WARNING: heavy utility penalty.\n"
+    "\n"
+    "CRITICAL RULES:\n"
+    "- Replace each sensitive item with exactly [REDACTED]\n"
+    "- Do NOT remove, rearrange, or rephrase any non-sensitive words\n"
+    "- Keep all formatting, punctuation, and whitespace exactly as-is\n"
+    "- If a person's name appears, their role MUST also be redacted, and vice versa\n"
+    "- Prefer \"redact\" over \"delete\" — surgical precision scores higher than blanket removal\n"
+    "\n"
+    "RESPONSE FORMAT (strict JSON, no markdown):\n"
+    "{\"reasoning\": \"<1 sentence>\", \"action_type\": \"redact\", \"content\": \"<the text with [REDACTED] replacements>\"}"
+)
 
 # --- AGENT DEFINITIONS ---
 
@@ -83,12 +88,16 @@ def llm_agent_logic(obs, client, model_name):
         )
         result = json.loads(response.choices[0].message.content)
         
-        # Map complex agent decisions to base environment actions
+        # Map any non-standard actions to valid environment actions
         action_type = result.get("action_type", "bypass")
-        if action_type in ["clean", "mask"]:
+        if action_type not in ["redact", "delete", "bypass"]:
             action_type = "redact"
+
+        content = result.get("content", obs['data_chunk'])
+        if not isinstance(content, str) or not content.strip():
+            content = obs['data_chunk']
             
-        return {"action_type": action_type, "content": result.get("content", obs['data_chunk'])}
+        return {"action_type": action_type, "content": content}
     except Exception as e:
         print(f"  [!] LLM Error: {e} → using enhanced fallback")
         action = enhanced_agent_logic(obs)
@@ -118,8 +127,13 @@ def evaluate_agent(agent_name, agent_func, base_url="http://localhost:7860"):
         # Step the environment
         step_resp = requests.post(f"{base_url}/step", json=action_payload)
         if step_resp.status_code != 200:
-            print("  [!] Environment step failed.")
-            break
+            # Retry with fallback agent instead of aborting
+            fallback = enhanced_agent_logic(obs)
+            step_resp = requests.post(f"{base_url}/step", json=fallback)
+            if step_resp.status_code != 200:
+                print(f"  [!] Step failed even with fallback (status {step_resp.status_code}). Skipping.")
+                break
+            used_fallback = True
             
         step_data = step_resp.json()
         score = step_data["reward"]["score"]
