@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import time
 import webbrowser
@@ -17,7 +18,19 @@ Rules:
 4. "bypass" - Use if safe.
 Return JSON: {"reasoning": "...", "action_type": "...", "content": "..."}"""
 
-def generate_html_report(original_text, sanitized_text):
+def fallback_regex_sanitizer(text):
+    original_text = text
+    # Standard email
+    text = re.sub(r'[\w\.-]+@[\w\.-]+', '[REDACTED]', text)
+    # API Keys (16+ alphanumeric characters)
+    text = re.sub(r'(sk-[a-zA-Z0-9]{16,}|[A-Za-z0-9]{16,})', '[REDACTED]', text)
+    # 10 Digit Phone
+    text = re.sub(r'\b\d{10}\b', '[REDACTED]', text)
+    
+    action = "redact" if text != original_text else "bypass"
+    return text, action
+
+def generate_html_report(original_text, sanitized_text, reasoning=""):
     """Generates a beautiful live visual audit trail and opens it."""
     
     # Securely wrap badge indicators using simple replacement
@@ -110,10 +123,23 @@ def generate_html_report(original_text, sanitized_text):
             display: inline-block;
             margin: 0 2px;
         }}
+        .warning-banner {{
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #ffeeba;
+            margin-bottom: 25px;
+            font-weight: bold;
+            display: {'block' if 'Fallback' in reasoning else 'none'};
+        }}
     </style>
 </head>
 <body>
     <div class="container">
+        <div class="warning-banner">
+            ⚠️ LLM API Offline: Processed using Local Regex Engine.
+        </div>
         <h1>🔍 Live Demo Visual Audit Trail</h1>
         <div class="meta">Agent Interaction: <strong>Interactive Playground Session</strong></div>
         
@@ -189,14 +215,21 @@ def run_interactive_demo():
         sanitized_content = result.get("content", user_input)
         
         # Build UI and wrap rendering logic natively decoupled from the terminal logic
-        generate_html_report(user_input, sanitized_content)
+        generate_html_report(user_input, sanitized_content, reasoning=result.get("reasoning", ""))
 
     except Exception as e:
+        print("\n[!] LLM API Failed (Error). Initiating Graceful Degradation -> Falling back to Local Regex Engine...")
+        
+        sanitized_content, action_type = fallback_regex_sanitizer(user_input)
+        fallback_reasoning = "System fallback triggered. Used deterministic regex rules to identify and redact standard PII/Secrets. Contextual masking unavailable."
+        
         print("\n" + "="*50)
-        print("❌ CRITICAL ERROR DURING INFERENCE")
+        print("✅ FALLBACK INFERENCE COMPLETE")
         print("="*50)
-        print(f"Exception Triggered: {e}")
-        print("\nDid you exceed your API quota or provide an invalid key? Please try again.")
+        print(f"\n🧠 Chain of Thought (Reasoning):\n   -> {fallback_reasoning}")
+        print(f"\n🛠️ Executed Action Type: \n   -> {action_type.upper()}")
+        
+        generate_html_report(user_input, sanitized_content, reasoning=fallback_reasoning)
 
 if __name__ == "__main__":
     run_interactive_demo()
