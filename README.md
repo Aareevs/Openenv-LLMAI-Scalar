@@ -2,7 +2,38 @@
 
 Release Desk is a deterministic OpenEnv environment for a real enterprise workflow: reviewing internal documents before they are released into an LLM training or retrieval pipeline. An agent must decide whether to pass a document through unchanged, redact literal secrets, rewrite a document into a safe form, or escalate for human review.
 
-The environment now covers phases 1 through 8:
+## 🚀 Quick Start (One Command)
+
+```bash
+./quick-start.sh
+```
+
+This will:
+- ✅ Create virtual environment (if needed)
+- ✅ Install dependencies
+- ✅ Run pre-flight checks
+- ✅ Start the API server
+- ✅ Run the benchmark evaluation
+- ✅ Generate and open the HTML report in your browser
+
+**That's it!** No manual setup, no separate terminals.
+
+### Troubleshooting Quick Start
+
+- **On Linux/Windows?** Run manually:
+  ```bash
+  python3 -m venv venv
+  source venv/bin/activate  # or 'venv\Scripts\activate' on Windows
+  pip install -r requirements.txt
+  python cli.py run
+  ```
+- **Check your setup first:** `python cli.py doctor`
+- **Start API only:** `python cli.py serve`
+- **Run evaluation only (API must be running):** `python cli.py demo`
+
+---
+
+The environment covers phases 1 through 8:
 
 1. Full typed OpenEnv contract
 2. Real-world task simulation across multiple document formats
@@ -120,7 +151,17 @@ RulesAgent: overall=0.971 easy=1.000 medium=0.916 hard=0.998
 
 ## How To Run
 
-### 1. Install dependencies
+### Quick Start (Recommended)
+
+```bash
+./quick-start.sh
+```
+
+See **Quick Start** section above for details.
+
+### Step-by-Step Manual Setup
+
+#### 1. Install dependencies
 
 ```bash
 python3 -m venv venv
@@ -128,13 +169,58 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Start the OpenEnv API
+#### 2. Configure credentials (optional for local testing)
+
+Copy `.env.example` to `.env` and add your OpenAI API key:
+
+```bash
+cp .env.example .env
+# Edit .env and add your OPENAI_API_KEY
+```
+
+#### 3. Check your setup
+
+```bash
+python cli.py doctor
+```
+
+#### 4. Start the API
+
+In terminal 1:
+
+```bash
+python cli.py serve
+```
+
+#### 5. Run evaluation
+
+In terminal 2:
+
+```bash
+python cli.py demo
+```
+
+### Alternative: All-in-One Script
+
+```bash
+python cli.py run
+```
+
+This starts the API, runs evaluation, and opens the report (fully automated).
+
+---
+
+### Original Manual Steps (Advanced)
+
+If you prefer manual control, here are the underlying commands:
+
+#### Start the OpenEnv API
 
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 7860
 ```
 
-### 3. Check that it is healthy
+#### Check that it is healthy
 
 ```bash
 curl http://localhost:7860/
@@ -143,7 +229,7 @@ curl -X POST http://localhost:7860/reset
 curl http://localhost:7860/state
 ```
 
-### 4. Run the baseline benchmark
+#### Run the baseline benchmark
 
 ```bash
 python inference.py
@@ -155,7 +241,7 @@ Optional benchmark export:
 BENCHMARK_OUTPUT_JSON=benchmark.json python inference.py
 ```
 
-### 5. Run the demo report
+#### Run the demo report
 
 ```bash
 python demo.py
@@ -168,7 +254,7 @@ This generates `release_desk_demo.html` with:
 - per-case reward metrics
 - risk, adversarial, and failure breakdowns
 
-### 6. Run everything in one command
+#### Run everything with release checks
 
 ```bash
 python scripts/run_release_checks.py
@@ -182,7 +268,9 @@ This command:
 - runs the benchmark and writes `benchmark.json`
 - generates `release_desk_demo.html`
 
-## Optional OpenAI baseline
+---
+
+### Optional OpenAI baseline
 
 ```bash
 export OPENAI_API_KEY=...
@@ -191,13 +279,6 @@ python inference.py
 ```
 
 If the OpenAI API returns quota or provider errors, the run will skip the LLM baseline and keep the local benchmark results.
-
-## Demo UX
-
-Run the visual report generator:
-
-```bash
-python demo.py
 ```
 
 It produces `release_desk_demo.html` with:
